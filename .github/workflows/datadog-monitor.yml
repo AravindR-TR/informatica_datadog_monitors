@@ -12,30 +12,36 @@ on:
           - enable
           - disable
       monitor_id:
-        description: '176133455'
+        description: 'Datadog Monitor ID'
         required: true
 
 jobs:
   manage-monitor:
     runs-on: ubuntu-latest
     steps:
-      - name: Call Datadog API to enable/disable monitor
+      - name: Fetch and update monitor
         env:
           DD_API_KEY: ${{ secrets.DATADOG_API_KEY }}
           DD_APP_KEY: ${{ secrets.DATADOG_APP_KEY }}
           MONITOR_ID: ${{ github.event.inputs.monitor_id }}
           ACTION: ${{ github.event.inputs.action }}
         run: |
+          echo "Fetching monitor definition..."
+          curl -s -X GET "https://api.datadoghq.com/api/v1/monitor/${MONITOR_ID}" \
+            -H "DD-API-KEY: $DD_API_KEY" \
+            -H "DD-APPLICATION-KEY: $DD_APP_KEY" \
+            -H "Content-Type: application/json" > monitor.json
+
+          echo "Modifying monitor disabled flag..."
           if [ "$ACTION" == "disable" ]; then
-            curl -X PUT "https://api.datadoghq.com/api/v1/monitor/${MONITOR_ID}" \
-              -H "DD-API-KEY: $DD_API_KEY" \
-              -H "DD-APPLICATION-KEY: $DD_APP_KEY" \
-              -H "Content-Type: application/json" \
-              -d '{"disabled": true}'
+            jq '. + {disabled: true}' monitor.json > updated_monitor.json
           else
-            curl -X PUT "https://api.datadoghq.com/api/v1/monitor/${MONITOR_ID}" \
-              -H "DD-API-KEY: $DD_API_KEY" \
-              -H "DD-APPLICATION-KEY: $DD_APP_KEY" \
-              -H "Content-Type: application/json" \
-              -d '{"disabled": false}'
+            jq '. + {disabled: false}' monitor.json > updated_monitor.json
           fi
+
+          echo "Updating monitor in Datadog..."
+          curl -s -X PUT "https://api.datadoghq.com/api/v1/monitor/${MONITOR_ID}" \
+            -H "DD-API-KEY: $DD_API_KEY" \
+            -H "DD-APPLICATION-KEY: $DD_APP_KEY" \
+            -H "Content-Type: application/json" \
+            -d @updated_monitor.json
