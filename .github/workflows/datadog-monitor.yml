@@ -1,63 +1,51 @@
-name: Manage Datadog Monitors by Tag
+- name: Find monitor IDs by tag and perform action
+  env:
+    DD_API_KEY: ${{ secrets.DATADOG_API_KEY }}
+    DD_APP_KEY: ${{ secrets.DATADOG_APP_KEY }}
+    ENV_TAG: ${{ github.event.inputs.env }}
+    SERVICE_TAG: ${{ github.event.inputs.service }}
+    ACTION: ${{ github.event.inputs.action }}
+  run: |
+    set -euo pipefail
 
-on:
-  workflow_dispatch:
-    inputs:
-      action:
-        description: 'Mute or unmute the monitor(s)'
-        required: true
-        default: 'mute'
-        type: choice
-        options:
-          - mute
-          - unmute
-      env:
-        description: 'Environment tag (e.g., prod, dev)'
-        required: true
-      service:
-        description: 'Service tag (e.g., api, web)'
-        required: true
+    echo "Querying monitors with: env:${ENV_TAG} service:${SERVICE_TAG}"
+    QUERY="env:${ENV_TAG} service:${SERVICE_TAG}"
 
-jobs:
-  manage-monitor:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Find monitor IDs by tag and perform action
-        env:
-          DD_API_KEY: ${{ secrets.DATADOG_API_KEY }}
-          DD_APP_KEY: ${{ secrets.DATADOG_APP_KEY }}
-          ENV_TAG: ${{ github.event.inputs.env }}
-          SERVICE_TAG: ${{ github.event.inputs.service }}
-          ACTION: ${{ github.event.inputs.action }}
-        run: |
-          echo "Querying monitors with: env:${ENV_TAG} service:${SERVICE_TAG}"
-          # Query monitors by space-separated tags
-          QUERY="env:${ENV_TAG} service:${SERVICE_TAG}"
-          RESPONSE=$(curl -s -X GET "https://api.datadoghq.com/api/v1/monitor/search?query=${QUERY}" \
-            -H "DD-API-KEY: $DD_API_KEY" \
-            -H "DD-APPLICATION-KEY: $DD_APP_KEY" \
-            -H "Content-Type: application/json")
+    RESPONSE=$(curl -s -w "\n%{http_code}" -X GET "https://api.datadoghq.com/api/v1/monitor/search?query=${QUERY}" \
+      -H "DD-API-KEY: $DD_API_KEY" \
+      -H "DD-APPLICATION-KEY: $DD_APP_KEY" \
+      -H "Content-Type: application/json")
 
-          echo "API response: $RESPONSE"
-          MONITOR_IDS=$(echo "$RESPONSE" | jq -r '.monitors[]?.id')
+    HTTP_BODY=$(echo "$RESPONSE" | sed '$d')
+    HTTP_STATUS=$(echo "$RESPONSE" | tail -n1)
 
-          if [ -z "$MONITOR_IDS" ]; then
-            echo "No monitors found with env=${ENV_TAG} and service=${SERVICE_TAG}"
-            exit 1
-          fi
+    echo "HTTP Status: $HTTP_STATUS"
+    echo "API Response: $HTTP_BODY"
 
-          for MONITOR_ID in $MONITOR_IDS; do
-            if [ "$ACTION" == "mute" ]; then
-              echo "Muting monitor $MONITOR_ID..."
-              curl -s -X POST "https://api.datadoghq.com/api/v1/monitor/${MONITOR_ID}/mute" \
-                -H "DD-API-KEY: $DD_API_KEY" \
-                -H "DD-APPLICATION-KEY: $DD_APP_KEY" \
-                -H "Content-Type: application/json"
-            else
-              echo "Unmuting monitor $MONITOR_ID..."
-              curl -s -X POST "https://api.datadoghq.com/api/v1/monitor/${MONITOR_ID}/unmute" \
-                -H "DD-API-KEY: $DD_API_KEY" \
-                -H "DD-APPLICATION-KEY: $DD_APP_KEY" \
-                -H "Content-Type: application/json"
-            fi
-          done
+    if [ "$HTTP_STATUS" -ne 200 ]; then
+      echo "Failed to query monitors. HTTP status: $HTTP_STATUS"
+      exit 2
+    fi
+
+    MONITOR_IDS=$(echo "$HTTP_BODY" | jq -r '.monitors[]?.id')
+
+    if [ -z "$MONITOR_IDS" ]; then
+      echo "No monitors found with env=${ENV_TAG} and service=${SERVICE_TAG}"
+      exit 1
+    fi
+
+    for MONITOR_ID in $MONITOR_IDS; do
+      if [ "$ACTION" == "mute" ]; then
+        echo "Muting monitor $MONITOR_ID..."
+        curl -s -X POST "https://api.datadoghq.com/api/v1/monitor/${MONITOR_ID}/mute" \
+          -H "DD-API-KEY: $DD_API_KEY" \
+          -H "DD-APPLICATION-KEY: $DD_APP_KEY" \
+          -H "Content-Type: application/json"
+      else
+        echo "Unmuting monitor $MONITOR_ID..."
+        curl -s -X POST "https://api.datadoghq.com/api/v1/monitor/${MONITOR_ID}/unmute" \
+          -H "DD-API-KEY: $DD_API_KEY" \
+          -H "DD-APPLICATION-KEY: $DD_APP_KEY" \
+          -H "Content-Type: application/json"
+      fi
+    done
