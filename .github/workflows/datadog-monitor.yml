@@ -1,41 +1,61 @@
-name: Manage Datadog Monitor
+name: Manage Datadog Monitors by Tag
 
 on:
   workflow_dispatch:
     inputs:
       action:
-        description: 'Mute or unmute the monitor'
+        description: 'Mute or unmute the monitor(s)'
         required: true
         default: 'mute'
         type: choice
         options:
           - mute
           - unmute
-      monitor_id:
-        description: 'Datadog Monitor ID'
+      env:
+        description: 'Environment tag (e.g., prod, dev)'
+        required: true
+      service:
+        description: 'Service tag (e.g., api, web)'
         required: true
 
 jobs:
   manage-monitor:
     runs-on: ubuntu-latest
     steps:
-      - name: Mute or unmute monitor
+      - name: Find monitor IDs by tag and perform action
         env:
           DD_API_KEY: ${{ secrets.DATADOG_API_KEY }}
           DD_APP_KEY: ${{ secrets.DATADOG_APP_KEY }}
-          MONITOR_ID: ${{ github.event.inputs.monitor_id }}
+          ENV_TAG: ${{ github.event.inputs.env }}
+          SERVICE_TAG: ${{ github.event.inputs.service }}
           ACTION: ${{ github.event.inputs.action }}
         run: |
-          if [ "$ACTION" == "mute" ]; then
-            echo "Muting monitor ${MONITOR_ID}..."
-            curl -s -X POST "https://api.datadoghq.com/api/v1/monitor/${MONITOR_ID}/mute" \
-              -H "DD-API-KEY: $DD_API_KEY" \
-              -H "DD-APPLICATION-KEY: $DD_APP_KEY" \
-              -H "Content-Type: application/json"
-          else
-            echo "Unmuting monitor ${MONITOR_ID}..."
-            curl -s -X POST "https://api.datadoghq.com/api/v1/monitor/${MONITOR_ID}/unmute" \
-              -H "DD-API-KEY: $DD_API_KEY" \
-              -H "DD-APPLICATION-KEY: $DD_APP_KEY" \
-              -H "Content-Type: application/json"
+          # Query monitors by tags
+          QUERY="tags:env:${ENV_TAG},service:${SERVICE_TAG}"
+          RESPONSE=$(curl -s -X GET "https://api.datadoghq.com/api/v1/monitor/search?query=${QUERY}" \
+            -H "DD-API-KEY: $DD_API_KEY" \
+            -H "DD-APPLICATION-KEY: $DD_APP_KEY" \
+            -H "Content-Type: application/json")
+          
+          MONITOR_IDS=$(echo "$RESPONSE" | jq -r '.monitors[]?.id')
+          
+          if [ -z "$MONITOR_IDS" ]; then
+            echo "No monitors found with env=${ENV_TAG} and service=${SERVICE_TAG}"
+            exit 1
           fi
+
+          for MONITOR_ID in $MONITOR_IDS; do
+            if [ "$ACTION" == "mute" ]; then
+              echo "Muting monitor $MONITOR_ID..."
+              curl -s -X POST "https://api.datadoghq.com/api/v1/monitor/${MONITOR_ID}/mute" \
+                -H "DD-API-KEY: $DD_API_KEY" \
+                -H "DD-APPLICATION-KEY: $DD_APP_KEY" \
+                -H "Content-Type: application/json"
+            else
+              echo "Unmuting monitor $MONITOR_ID..."
+              curl -s -X POST "https://api.datadoghq.com/api/v1/monitor/${MONITOR_ID}/unmute" \
+                -H "DD-API-KEY: $DD_API_KEY" \
+                -H "DD-APPLICATION-KEY: $DD_APP_KEY" \
+                -H "Content-Type: application/json"
+            fi
+          done
