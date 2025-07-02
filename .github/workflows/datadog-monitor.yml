@@ -30,6 +30,7 @@ jobs:
           SERVICE_TAG: ${{ github.event.inputs.service }}
           ACTION: ${{ github.event.inputs.action }}
         run: |
+          echo "Querying monitors with: env:${ENV_TAG} service:${SERVICE_TAG}"
           # Query monitors by space-separated tags
           QUERY="env:${ENV_TAG} service:${SERVICE_TAG}"
           RESPONSE=$(curl -s -X GET "https://api.datadoghq.com/api/v1/monitor/search?query=${QUERY}" \
