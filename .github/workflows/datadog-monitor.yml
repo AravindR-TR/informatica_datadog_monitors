@@ -27,7 +27,7 @@ jobs:
           ACTION: ${{ github.event.inputs.action }}
         run: |
           echo "Querying monitors with tag: ${TAG}"
-          RESPONSE=$(curl -s -X GET "https://api.datadoghq.com/api/v1/monitor/search?query=tag:${TAG}" \
+          RESPONSE=$(curl -s -X GET "https://tr-dataengineering-preprod.datadoghq.com/api/v1/monitor/search?query=tag:${TAG}" \
             -H "DD-API-KEY: $DD_API_KEY" \
             -H "DD-APPLICATION-KEY: $DD_APP_KEY" \
             -H "Content-Type: application/json")
@@ -43,13 +43,13 @@ jobs:
           for MONITOR_ID in $MONITOR_IDS; do
             if [ "$ACTION" == "mute" ]; then
               echo "Muting monitor $MONITOR_ID..."
-              curl -s -X POST "https://api.datadoghq.com/api/v1/monitor/${MONITOR_ID}/mute" \
+              curl -s -X POST "https://tr-dataengineering-preprod.datadoghq.com/api/v1/monitor/${MONITOR_ID}/mute" \
                 -H "DD-API-KEY: $DD_API_KEY" \
                 -H "DD-APPLICATION-KEY: $DD_APP_KEY" \
                 -H "Content-Type: application/json"
             elif [ "$ACTION" == "unmute" ]; then
               echo "Unmuting monitor $MONITOR_ID..."
-              curl -s -X POST "https://api.datadoghq.com/api/v1/monitor/${MONITOR_ID}/unmute" \
+              curl -s -X POST "https://tr-dataengineering-preprod.datadoghq.com/api/v1/monitor/${MONITOR_ID}/unmute" \
                 -H "DD-API-KEY: $DD_API_KEY" \
                 -H "DD-APPLICATION-KEY: $DD_APP_KEY" \
                 -H "Content-Type: application/json"
