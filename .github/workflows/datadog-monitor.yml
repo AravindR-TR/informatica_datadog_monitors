@@ -26,8 +26,8 @@ jobs:
           SERVICE: ${{ github.event.inputs.service }}
           ACTION: ${{ github.event.inputs.action }}
         run: |
-          echo "Querying monitors with service: \"${SERVICE}\""
-          RAW_QUERY="service:\"${SERVICE}\""
+          echo "Querying monitors with service: " ${SERVICE}""
+          RAW_QUERY="service:\" ${SERVICE}\""
           ENCODED_QUERY=$(jq -rn --arg q "$RAW_QUERY" '$q | @uri')
 
           RESPONSE=$(curl -s -X GET "https://api.datadoghq.com/api/v1/monitor/search?query=${ENCODED_QUERY}" \
@@ -39,7 +39,7 @@ jobs:
           MONITOR_IDS=$(echo "$RESPONSE" | jq -r '.monitors[]?.id')
 
           if [ -z "$MONITOR_IDS" ]; then
-            echo "No monitors found with service=\"${SERVICE}\""
+            echo "No monitors found with service=" ${SERVICE}""
             exit 1
           fi
 
