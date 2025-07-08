@@ -26,6 +26,10 @@ jobs:
           TAG: ${{ github.event.inputs.tag }}
           ACTION: ${{ github.event.inputs.action }}
         run: |
+          # Debug: Show the start/end of secrets. Remove these two lines after debugging!
+          echo "DD_API_KEY starts with: ${DD_API_KEY:0:5}, ends with: ${DD_API_KEY: -5}"
+          echo "DD_APP_KEY starts with: ${DD_APP_KEY:0:5}, ends with: ${DD_APP_KEY: -5}"
+
           echo "Querying monitors with tag: ${TAG}"
           RESPONSE=$(curl -s -X GET "https://api.datadoghq.com/api/v1/monitor/search?query=tag:${TAG}" \
             -H "DD-API-KEY: $DD_API_KEY" \
@@ -33,6 +37,17 @@ jobs:
             -H "Content-Type: application/json")
 
           echo "API response: $RESPONSE"
+
+          # Check for API errors
+          ERROR_MSG=$(echo "$RESPONSE" | jq -r '.errors[0]')
+          if [[ "$ERROR_MSG" == "Forbidden" ]]; then
+            echo "ERROR: API Key or Application Key does not have sufficient permissions or are not valid for this account/site."
+            exit 1
+          elif [[ "$ERROR_MSG" != "null" ]]; then
+            echo "ERROR from Datadog API: $ERROR_MSG"
+            exit 1
+          fi
+
           MONITOR_IDS=$(echo "$RESPONSE" | jq -r '.monitors[]?.id')
 
           if [ -z "$MONITOR_IDS" ]; then
