@@ -1,4 +1,4 @@
-name: Manage Datadog Monitors by Service Tag
+name: Manage Datadog Monitors by Service
 
 on:
   workflow_dispatch:
@@ -12,26 +12,24 @@ on:
           - mute
           - unmute
       service:
-        description: 'Datadog service tag (e.g., informatica_metadoc_dev)'
+        description: 'Service name (e.g., informatica_metadoc_dev)'
         required: true
 
 jobs:
   manage-monitor:
     runs-on: ubuntu-latest
     steps:
-      - name: Mute or unmute monitors by service tag
+      - name: Mute or unmute monitors by service name
         env:
           DD_API_KEY: ${{ secrets.DATADOG_API_KEY }}
           DD_APP_KEY: ${{ secrets.DATADOG_APP_KEY }}
           SERVICE: ${{ github.event.inputs.service }}
           ACTION: ${{ github.event.inputs.action }}
         run: |
-          echo "Querying monitors with service tag: ${SERVICE}"
+          echo "Querying monitors with service: \"${SERVICE}\""
+          RAW_QUERY="service:\"${SERVICE}\""
+          ENCODED_QUERY=$(jq -rn --arg q "$RAW_QUERY" '$q | @uri')
 
-          # Encode the full query: service:"your_tag"
-          ENCODED_QUERY=$(jq -rn --arg s "service:\"${SERVICE}\"" '$s | @uri')
-
-          # Perform the search
           RESPONSE=$(curl -s -X GET "https://api.datadoghq.com/api/v1/monitor/search?query=${ENCODED_QUERY}" \
             -H "DD-API-KEY: $DD_API_KEY" \
             -H "DD-APPLICATION-KEY: $DD_APP_KEY" \
@@ -41,7 +39,7 @@ jobs:
           MONITOR_IDS=$(echo "$RESPONSE" | jq -r '.monitors[]?.id')
 
           if [ -z "$MONITOR_IDS" ]; then
-            echo "No monitors found with service=${SERVICE}"
+            echo "No monitors found with service=\"${SERVICE}\""
             exit 1
           fi
 
