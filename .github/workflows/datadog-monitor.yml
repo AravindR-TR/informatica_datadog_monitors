@@ -1,4 +1,4 @@
-name: Manage Datadog Monitors by Tag
+name: Manage Datadog Monitors by Service Tag
 
 on:
   workflow_dispatch:
@@ -11,23 +11,23 @@ on:
         options:
           - mute
           - unmute
-      tag:
-        description: 'Datadog tag (e.g., informatica_dev)'
+      service:
+        description: 'Datadog service tag (e.g., informatica_metadoc_dev)'
         required: true
 
 jobs:
   manage-monitor:
     runs-on: ubuntu-latest
     steps:
-      - name: Mute or unmute monitors by tag
+      - name: Mute or unmute monitors by service tag
         env:
           DD_API_KEY: ${{ secrets.DATADOG_API_KEY }}
           DD_APP_KEY: ${{ secrets.DATADOG_APP_KEY }}
-          TAG: ${{ github.event.inputs.tag }}
+          SERVICE: ${{ github.event.inputs.service }}
           ACTION: ${{ github.event.inputs.action }}
         run: |
-          echo "Querying monitors with tag: ${TAG}"
-          RESPONSE=$(curl -s -X GET "https://api.datadoghq.com/api/v1/monitor/search?query=tag:${TAG}" \
+          echo "Querying monitors with service tag: ${SERVICE}"
+          RESPONSE=$(curl -s -X GET "https://api.datadoghq.com/api/v1/monitor/search?query=service:${SERVICE}" \
             -H "DD-API-KEY: $DD_API_KEY" \
             -H "DD-APPLICATION-KEY: $DD_APP_KEY" \
             -H "Content-Type: application/json")
@@ -36,7 +36,7 @@ jobs:
           MONITOR_IDS=$(echo "$RESPONSE" | jq -r '.monitors[]?.id')
 
           if [ -z "$MONITOR_IDS" ]; then
-            echo "No monitors found with tag=${TAG}"
+            echo "No monitors found with service=${SERVICE}"
             exit 1
           fi
 
