@@ -1,72 +1,63 @@
-name: Manage Datadog Monitors by Tag
+name: Manage Datadog Monitor
 
 on:
   workflow_dispatch:
     inputs:
       action:
-        description: 'Mute or unmute the monitor(s)'
+        description: 'Enable or disable the monitor'
+        description: 'Mute or unmute the monitor'
         required: true
+        default: 'disable'
         default: 'mute'
         type: choice
         options:
+          - enable
+          - disable
           - mute
           - unmute
-      tag:
-        description: 'Datadog tag (e.g., informatica_dev)'
+      monitor_id:
+        description: 'Datadog Monitor ID'
         required: true
 
 jobs:
   manage-monitor:
     runs-on: ubuntu-latest
     steps:
-      - name: Find monitor IDs by tag and perform action
+      - name: Fetch and update monitor
+      - name: Mute or unmute monitor
         env:
           DD_API_KEY: ${{ secrets.DATADOG_API_KEY }}
           DD_APP_KEY: ${{ secrets.DATADOG_APP_KEY }}
-          TAG: ${{ github.event.inputs.tag }}
+          MONITOR_ID: ${{ github.event.inputs.monitor_id }}
           ACTION: ${{ github.event.inputs.action }}
         run: |
-          # Debug: Show the start/end of secrets. Remove these two lines after debugging!
-          echo "DD_API_KEY starts with: ${DD_API_KEY:0:5}, ends with: ${DD_API_KEY: -5}"
-          echo "DD_APP_KEY starts with: ${DD_APP_KEY:0:5}, ends with: ${DD_APP_KEY: -5}"
-
-          echo "Querying monitors with tag: ${TAG}"
-          RESPONSE=$(curl -s -X GET "https://api.datadoghq.com/api/v1/monitor/search?query=tag:${TAG}" \
+          echo "Fetching monitor definition..."
+          curl -s -X GET "https://api.datadoghq.com/api/v1/monitor/${MONITOR_ID}" \
             -H "DD-API-KEY: $DD_API_KEY" \
             -H "DD-APPLICATION-KEY: $DD_APP_KEY" \
-            -H "Content-Type: application/json")
+            -H "Content-Type: application/json" > monitor.json
 
-          echo "API response: $RESPONSE"
-
-          # Check for API errors
-          ERROR_MSG=$(echo "$RESPONSE" | jq -r '.errors[0]')
-          if [[ "$ERROR_MSG" == "Forbidden" ]]; then
-            echo "ERROR: API Key or Application Key does not have sufficient permissions or are not valid for this account/site."
-            exit 1
-          elif [[ "$ERROR_MSG" != "null" ]]; then
-            echo "ERROR from Datadog API: $ERROR_MSG"
-            exit 1
+          echo "Modifying monitor disabled flag..."
+          if [ "$ACTION" == "disable" ]; then
+            jq '. + {disabled: true}' monitor.json > updated_monitor.json
+          if [ "$ACTION" == "mute" ]; then
+            echo "Muting monitor ${MONITOR_ID}..."
+            curl -s -X POST "https://api.datadoghq.com/api/v1/monitor/${MONITOR_ID}/mute" \
+              -H "DD-API-KEY: $DD_API_KEY" \
+              -H "DD-APPLICATION-KEY: $DD_APP_KEY" \
+              -H "Content-Type: application/json"
+          else
+            jq '. + {disabled: false}' monitor.json > updated_monitor.json
+            echo "Unmuting monitor ${MONITOR_ID}..."
+            curl -s -X POST "https://api.datadoghq.com/api/v1/monitor/${MONITOR_ID}/unmute" \
+              -H "DD-API-KEY: $DD_API_KEY" \
+              -H "DD-APPLICATION-KEY: $DD_APP_KEY" \
+              -H "Content-Type: application/json"
           fi
 
-          MONITOR_IDS=$(echo "$RESPONSE" | jq -r '.monitors[]?.id')
-
-          if [ -z "$MONITOR_IDS" ]; then
-            echo "No monitors found with tag=${TAG}"
-            exit 1
-          fi
-
-          for MONITOR_ID in $MONITOR_IDS; do
-            if [ "$ACTION" == "mute" ]; then
-              echo "Muting monitor $MONITOR_ID..."
-              curl -s -X POST "https://api.datadoghq.com/api/v1/monitor/${MONITOR_ID}/mute" \
-                -H "DD-API-KEY: $DD_API_KEY" \
-                -H "DD-APPLICATION-KEY: $DD_APP_KEY" \
-                -H "Content-Type: application/json"
-            else
-              echo "Unmuting monitor $MONITOR_ID..."
-              curl -s -X POST "https://api.datadoghq.com/api/v1/monitor/${MONITOR_ID}/unmute" \
-                -H "DD-API-KEY: $DD_API_KEY" \
-                -H "DD-APPLICATION-KEY: $DD_APP_KEY" \
-                -H "Content-Type: application/json"
-            fi
-          done
+          echo "Updating monitor in Datadog..."
+          curl -s -X PUT "https://api.datadoghq.com/api/v1/monitor/${MONITOR_ID}" \
+            -H "DD-API-KEY: $DD_API_KEY" \
+            -H "DD-APPLICATION-KEY: $DD_APP_KEY" \
+            -H "Content-Type: application/json" \
+            -d @updated_monitor.json
