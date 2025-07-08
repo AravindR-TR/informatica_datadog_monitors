@@ -12,7 +12,7 @@ on:
           - mute
           - unmute
       tag:
-        description: 'Single Datadog tag (e.g., informatica_dev)'
+        description: 'Datadog tag (e.g., informatica_dev)'
         required: true
 
 jobs:
