@@ -11,11 +11,8 @@ on:
         options:
           - mute
           - unmute
-      env:
-        description: 'Environment tag (e.g., prod, dev)'
-        required: true
-      service:
-        description: 'Service tag (e.g., api, web)'
+      tag:
+        description: 'Single Datadog tag (e.g., informatica_dev)'
         required: true
 
 jobs:
@@ -26,14 +23,11 @@ jobs:
         env:
           DD_API_KEY: ${{ secrets.DATADOG_API_KEY }}
           DD_APP_KEY: ${{ secrets.DATADOG_APP_KEY }}
-          ENV_TAG: ${{ github.event.inputs.env }}
-          SERVICE_TAG: ${{ github.event.inputs.service }}
+          TAG: ${{ github.event.inputs.tag }}
           ACTION: ${{ github.event.inputs.action }}
         run: |
-          echo "Querying monitors with: env:${ENV_TAG} service:${SERVICE_TAG}"
-          # Query monitors by space-separated tags
-          QUERY="env:${ENV_TAG} service:${SERVICE_TAG}"
-          RESPONSE=$(curl -s -X GET "https://api.datadoghq.com/api/v1/monitor/search?query=${QUERY}" \
+          echo "Querying monitors with tag: ${TAG}"
+          RESPONSE=$(curl -s -X GET "https://api.datadoghq.com/api/v1/monitor/search?query=tag:${TAG}" \
             -H "DD-API-KEY: $DD_API_KEY" \
             -H "DD-APPLICATION-KEY: $DD_APP_KEY" \
             -H "Content-Type: application/json")
@@ -42,7 +36,7 @@ jobs:
           MONITOR_IDS=$(echo "$RESPONSE" | jq -r '.monitors[]?.id')
 
           if [ -z "$MONITOR_IDS" ]; then
-            echo "No monitors found with env=${ENV_TAG} and service=${SERVICE_TAG}"
+            echo "No monitors found with tag=${TAG}"
             exit 1
           fi
 
