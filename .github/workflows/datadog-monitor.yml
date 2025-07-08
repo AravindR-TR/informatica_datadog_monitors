@@ -1,32 +1,29 @@
-name: Manage Datadog Monitors by Tag
+name: Manage Datadog Monitor with Tag "informatica_dev"
 
 on:
   workflow_dispatch:
     inputs:
       action:
-        description: 'Mute or unmute the monitor(s)'
+        description: 'Mute or unmute the monitor(s) with tag "informatica_dev"'
         required: true
         default: 'mute'
         type: choice
         options:
           - mute
           - unmute
-      tag:
-        description: 'Datadog tag (e.g., informatica_dev)'
-        required: true
 
 jobs:
-  manage-monitor:
+  manage-informatica-dev-monitor:
     runs-on: ubuntu-latest
     steps:
-      - name: Mute or unmute monitors by tag
+      - name: Manage monitor with tag "informatica_dev"
         env:
           DD_API_KEY: ${{ secrets.DATADOG_API_KEY }}
           DD_APP_KEY: ${{ secrets.DATADOG_APP_KEY }}
-          TAG: ${{ github.event.inputs.tag }}
+          TAG: informatica_dev
           ACTION: ${{ github.event.inputs.action }}
         run: |
-          echo "Querying monitors with tag: ${TAG}"
+          echo "Searching for monitor(s) with tag: ${TAG}"
           RESPONSE=$(curl -s -X GET "https://api.datadoghq.com/api/v1/monitor/search?query=tag:${TAG}" \
             -H "DD-API-KEY: $DD_API_KEY" \
             -H "DD-APPLICATION-KEY: $DD_APP_KEY" \
