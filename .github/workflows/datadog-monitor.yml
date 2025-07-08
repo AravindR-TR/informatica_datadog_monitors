@@ -27,10 +27,12 @@ jobs:
           ACTION: ${{ github.event.inputs.action }}
         run: |
           echo "Querying monitors with service tag: ${SERVICE}"
-          ENCODED_SERVICE=$(jq -rn --arg s "$SERVICE" '$s | @uri')
-          QUERY="service%3A%22${ENCODED_SERVICE}%22"
 
-          RESPONSE=$(curl -s -X GET "https://api.datadoghq.com/api/v1/monitor/search?query=${QUERY}" \
+          # Encode the full query: service:"your_tag"
+          ENCODED_QUERY=$(jq -rn --arg s "service:\"${SERVICE}\"" '$s | @uri')
+
+          # Perform the search
+          RESPONSE=$(curl -s -X GET "https://api.datadoghq.com/api/v1/monitor/search?query=${ENCODED_QUERY}" \
             -H "DD-API-KEY: $DD_API_KEY" \
             -H "DD-APPLICATION-KEY: $DD_APP_KEY" \
             -H "Content-Type: application/json")
